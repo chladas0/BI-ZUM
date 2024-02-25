@@ -1,0 +1,2 @@
+Program to find the shortest path between start [X1, Y1] -> end [X2, Y2] on chessboard, moving as a knight (shape of L). 
+Movement is visualized using mathPlotLib.
