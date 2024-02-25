@@ -1,0 +1,8 @@
+# Compiled Python files
+*.pyc
+
+# Files created by PyCharm
+.idea/
+
+# Virtual environment
+venv/
