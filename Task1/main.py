@@ -5,8 +5,13 @@ import sys
 from queue import Queue, PriorityQueue
 import numpy as np
 
-# todo calculate from rows and cols
-CELL_SIZE = 10
+
+class ArgumentsError(Exception):
+    pass
+
+
+# Constants ------------------------------------------------------------------------------------------------------------
+CELL_SIZE = 7
 SLEEP_TIME = 0
 
 # Colors
@@ -22,24 +27,28 @@ COLORS = {' ': WHITE, 'X': GREY, 'o': BLUE, 'c': GREEN, 'p': RED, 's': YELLOW, '
 
 NEIGHBOURS = {(0, 1), (0, -1), (1, 0), (-1, 0)}
 
+maze = np.array([])
+screen = pygame.display.set_mode((800, 600))
+
 
 # Visualization --------------------------------------------------------------------------------------------------------
-def draw_maze(screen, maze):
+
+def draw_maze():
     for y in range(len(maze)):
         for x in range(len(maze[y])):
             color = COLORS[maze[y][x]]
             pygame.draw.rect(screen, color, (x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE))
 
 
-def visualize_path(bfs_path, maze, screen, start, end):
+def visualize_path(bfs_path, start, end):
     # Show start and end
     maze[start[::-1]] = 's'
     maze[end[::-1]] = 'e'
 
-    animate_move(maze, screen)
+    animate_move()
     for vertex in bfs_path:
         maze[vertex[::-1]] = 'p'
-        animate_move(maze, screen)
+        animate_move()
 
 
 # Pygame - Check Events
@@ -52,8 +61,8 @@ def check_events():
 
 # Reading input --------------------------------------------------------------------------------------------------------
 def read_input(filename):
-    maze = []
     start, end = None, None
+    tmp_maze = []
     with open(filename, 'r') as file:
         for line in file:
             row = line.strip()
@@ -62,21 +71,36 @@ def read_input(filename):
             elif "end" in row:
                 end = tuple(map(int, row.replace("end", "").split(", ")))
             else:
-                maze.append(list(row))
-    return np.array(maze), start, end
+                tmp_maze.append(list(row))
+    global maze
+    maze = np.array(tmp_maze)
+    return start, end
 
 
+def read_args():
+    if len(sys.argv) <= 3:
+        raise ArgumentsError("Usage: python main.py <filename> <algorithm{bfs,dfs,a*,greedy,random}> <{slow,fast}>")
+
+    filename = sys.argv[1]
+    algo = sys.argv[2]
+    speed = sys.argv[3]
+
+    if speed == "slow":
+        global SLEEP_TIME
+        SLEEP_TIME = 0.1
+
+    return filename, algo
 # Helper functions -----------------------------------------------------------------------------------------------------
-def valid_position(maze, x, y, visited):
-    return 0 <= x < len(maze[0]) and 0 <= y < len(maze) and maze[y][x] != 'X' and (x, y) not in visited
+def valid_position(maze, x, y):
+    return 0 <= x < len(maze[0]) and 0 <= y < len(maze) and maze[y][x] != 'X' and maze[y][x] != 'c'
 
 
-def get_neighbours(maze, current, visited):
+def get_neighbours(current):
     neighbours = []
     for neighbour in NEIGHBOURS:
         x = current[0] + neighbour[0]
         y = current[1] + neighbour[1]
-        if valid_position(maze, x, y, visited):
+        if valid_position(maze, x, y):
             neighbours.append((x, y))
     return neighbours
 
@@ -85,19 +109,18 @@ def backtrack(parent, end):
     path = []
     current = end
     while current is not None:
-        print(current)
         path.append(current)
         current = parent[current]
     return path[::-1]
 
 
-def animate_move(maze, screen):
-    #    sleep(SLEEP_TIME)
-    redraw(screen, maze)
+def animate_move():
+    sleep(SLEEP_TIME)
+    redraw()
 
 
-def redraw(screen, maze, clock=pygame.time.Clock()):
-    draw_maze(screen, maze)
+def redraw():
+    draw_maze()
     pygame.display.flip()
     check_events()
 
@@ -107,14 +130,13 @@ def eukleid_distance(a, b):
 
 
 # BFS ------------------------------------------------------------------------------------------------------------------
-def bfs(maze, start, end, screen):
+def bfs(start, end):
     q = Queue()
     visited = set()
-    parent = {}
+    parent = {start: None}
 
     # init
     q.put(start)
-    parent[start] = None
     visited.add(start)
 
     while not q.empty():
@@ -122,29 +144,26 @@ def bfs(maze, start, end, screen):
 
         if current == end:
             maze[current[::-1]] = 'c'
-            animate_move(maze, screen)
+            animate_move()
             break
 
-        for neighbour in get_neighbours(maze, current, visited):
+        for neighbour in get_neighbours(current):
             if neighbour not in visited:
                 q.put(neighbour)
                 visited.add(neighbour)
                 parent[neighbour] = current
 
                 maze[neighbour[::-1]] = 'o'
-                animate_move(maze, screen)
+                animate_move()
 
         maze[current[::-1]] = 'c'
-        animate_move(maze, screen)
+        animate_move()
 
     return backtrack(parent, end)
 
 
 # A*  ------------------------------------------------------------------------------------------------------------------
-
-
-# TODO FIX STATES - CLOSED, OPEN, FRESH
-def a_star(maze, start, end, screen, heuristic):
+def a_star(start, end, heuristic=eukleid_distance):
     q = PriorityQueue()
     visited = set()
     parent = {}
@@ -161,27 +180,27 @@ def a_star(maze, start, end, screen, heuristic):
 
         if current == end:
             maze[current[::-1]] = 'c'
-            animate_move(maze, screen)
+            animate_move()
             break
 
-        for neighbour in get_neighbours(maze, current, visited):
-            if neighbour not in visited:
-                distance = dist[current] + 1
+        # returns neighbours that are not closed and are not wall
+        for neighbour in get_neighbours(current):
+            distance = dist[current] + 1
+            if neighbour not in visited or distance < dist[neighbour]:
                 dist[neighbour] = distance
-                # + 1 for the cost of moving to the neighbour
                 q.put((distance + heuristic(neighbour, end), neighbour))
                 visited.add(neighbour)
                 parent[neighbour] = current
                 maze[neighbour[::-1]] = 'o'
 
         maze[current[::-1]] = 'c'
-        animate_move(maze, screen)
+        animate_move()
 
     return backtrack(parent, end)
 
 
 # Greedy ---------------------------------------------------------------------------------------------------------------
-def greedy_search(maze, start, end, screen, heuristic):
+def greedy_search(start, end, heuristic=eukleid_distance):
     q = PriorityQueue()
     visited = set()
     parent = {}
@@ -192,14 +211,12 @@ def greedy_search(maze, start, end, screen, heuristic):
     visited.add(start)
 
     while not q.empty():
-        cur_prio, current = q.get()
+        _, current = q.get()
 
         if current == end:
-            maze[current[::-1]] = 'c'
-            animate_move(maze, screen)
             break
 
-        for neighbour in get_neighbours(maze, current, visited):
+        for neighbour in get_neighbours(current):
             if neighbour not in visited:
                 q.put((heuristic(neighbour, end), neighbour))
                 visited.add(neighbour)
@@ -207,14 +224,14 @@ def greedy_search(maze, start, end, screen, heuristic):
                 maze[neighbour[::-1]] = 'o'
 
         maze[current[::-1]] = 'c'
-        animate_move(maze, screen)
+        animate_move()
 
     return backtrack(parent, end)
 
 
 # RandomSearch ---------------------------------------------------------------------------------------------------------
 
-def random_search(maze, start, end, screen):
+def random_search(start, end):
     q = list()
     visited = set()
     parent = {}
@@ -230,116 +247,85 @@ def random_search(maze, start, end, screen):
         del q[idx]
 
         if current == end:
-            maze[current[::-1]] = 'c'
-            animate_move(maze, screen)
             break
 
-        for neighbour in get_neighbours(maze, current, visited):
+        for neighbour in get_neighbours(current):
             if neighbour not in visited:
                 q.append(neighbour)
                 visited.add(neighbour)
                 parent[neighbour] = current
 
                 maze[neighbour[::-1]] = 'o'
-                animate_move(maze, screen)
+                animate_move()
 
         maze[current[::-1]] = 'c'
-        animate_move(maze, screen)
+        animate_move()
 
     return backtrack(parent, end)
 
 
-# DFS
+# DFS ------------------------------------------------------------------------------------------------------------------
 
-def dfs_recursive(maze, current, end, visited, parent, screen):
+def dfs_recursive(current, end, visited, parent):
     if current == end:
-        maze[current[::-1]] = 'c'
-        animate_move(maze, screen)
         return True
 
     visited.add(current)
 
-    for neighbour in get_neighbours(maze, current, visited):
+    for neighbour in get_neighbours(current):
         if neighbour not in visited:
             parent[neighbour] = current
 
             maze[neighbour[::-1]] = 'o'
-            animate_move(maze, screen)
+            animate_move()
 
-            if dfs_recursive(maze, neighbour, end, visited, parent, screen):
+            if dfs_recursive(neighbour, end, visited, parent):
                 return True
 
     maze[current[::-1]] = 'c'
-    animate_move(maze, screen)
+    animate_move()
     return False
 
-def dfs(maze, start, end, screen):
+
+def dfs(start, end):
     visited = set()
-    parent = {}
+    parent = {start: None}
 
-    # Initialize
-    parent[start] = None
-
-    dfs_recursive(maze, start, end, visited, parent, screen)
+    dfs_recursive(start, end, visited, parent)
     return backtrack(parent, end)
 
-def main():
-    pygame.init()
 
-    # TODO read filename from cmdline
-    filename = "dataset/6.txt"
-
-    maze, start, end = read_input(filename)
+def screen_init(start, end):
+    global screen
     cols, rows = len(maze[0]), len(maze)
-
-    maze_copy = maze.copy()
-
-    # Set up the screen
     screen_width, screen_height = cols * CELL_SIZE, rows * CELL_SIZE
     screen = pygame.display.set_mode((screen_width, screen_height))
     pygame.display.set_caption("Maze")
 
     maze[start[::-1]] = 's'
     maze[end[::-1]] = 'e'
-
-    redraw(screen, maze)
-    sleep(SLEEP_TIME)
-
-    # bfs_path = bfs(maze, start, end, screen)
-    # sleep(SLEEP_TIME)
-    # visualize_path(bfs_path, maze, screen, start, end)
-
-    maze = maze_copy.copy()
-
-#    A* with eukleid distance
-    a_star_path = a_star(maze, start, end, screen, eukleid_distance)
-    sleep(SLEEP_TIME)
-    visualize_path(a_star_path, maze, screen, start, end)
-
-    maze = maze_copy.copy()
-
-#    Greedy with eukleid distance
-    greedy_path = greedy_search(maze, start, end, screen, eukleid_distance)
-    sleep(SLEEP_TIME)
-    visualize_path(greedy_path, maze, screen, start, end)
+    animate_move()
 
 
-    # Random search
-    # maze = maze_copy.copy()
-    # random_path = random_search(maze, start, end, screen)
-    # sleep(SLEEP_TIME)
-    # visualize_path(random_path, maze, screen, start, end)
+def main():
+    pygame.init()
+    algorithms = {'bfs': bfs, 'dfs': dfs, 'a*': a_star, 'greedy': greedy_search, 'random': random_search}
 
-    # DFS
-    maze = maze_copy.copy()
-    dfs_path = dfs(maze, start, end, screen)
-    sleep(SLEEP_TIME)
-    visualize_path(dfs_path, maze, screen, start, end)
+    try:
+        filename, algo = read_args()
+        start, end = read_input(filename)
+        screen_init(start, end)
+        path = algorithms[algo](start, end)
+        visualize_path(path, start, end)
+
+    except Exception as e:
+        print(e)
+        return
 
     # Main loop
     while True:
         check_events()
-        redraw(screen, maze)
+        redraw()
 
 
 if __name__ == "__main__":
