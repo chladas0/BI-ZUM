@@ -84,10 +84,11 @@ def dijkstra(start, end):
     visited = set()
     q = PriorityQueue()
     q.put((0, start))
-    prev = {start: ""}
+    dist = {start: 0}
+    prev = {start: None}
 
     while not q.empty():
-        dist, current = q.get()
+        dist_current, current = q.get()
 
         # end reached
         if current == end:
@@ -95,10 +96,12 @@ def dijkstra(start, end):
 
         visited.add(current)
 
-        for neighbor, prio in neighbours[current].items():
-            if neighbor not in visited:
-                q.put((dist + prio, neighbor))
+        for neighbor, cost in neighbours[current].items():
+            dist_neighbor = dist_current + cost
+            if neighbor not in dist or dist_neighbor < dist[neighbor]:
+                dist[neighbor] = dist_neighbor
                 prev[neighbor] = current
+                q.put((dist_neighbor, neighbor))
 
     return backtrack(start, end, prev)
 
