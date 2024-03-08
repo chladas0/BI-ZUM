@@ -49,16 +49,24 @@ def draw_maze():
             pygame.draw.rect(screen, color, (x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE))
 
 
+def draw_step(x, y):
+    stepper() if step else sleep(SLEEP_TIME)
+    color = COLORS[maze[y][x]]
+    pygame.draw.rect(screen, color, (x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+    pygame.display.flip()
+    check_events()
+
+
 def visualize_path(path, start, end):
     expanded = np.count_nonzero((maze == 'c') | (maze == 'o'))
 
     maze[start[::-1]] = 's'
     maze[end[::-1]] = 'e'
+    draw_step(*start), draw_step(*end)
 
-    animate_move()
     for vertex in path:
         maze[vertex[::-1]] = 'p'
-        animate_move()
+        draw_step(*vertex)
 
     # Draw labels
     font = pygame.font.Font(None, 80)
@@ -88,6 +96,7 @@ def screen_init(start, end, algo):
     maze[start[::-1]] = 's'
     maze[end[::-1]] = 'e'
     redraw()
+    sleep(1)
 
 
 def check_flip_maze(start, end):
@@ -98,11 +107,6 @@ def check_flip_maze(start, end):
         return start[::-1], end[::-1]
 
     return start, end
-
-
-def animate_move():
-    stepper() if step else sleep(SLEEP_TIME)
-    redraw()
 
 
 def redraw():
@@ -156,15 +160,19 @@ def read_args():
     global SLEEP_TIME, step
 
     if len(sys.argv) <= 4:
-        raise ArgumentsError("Usage: python main.py <filename> <{bfs,dfs,a*,greedy,random}> <{slow,fast}> <{"
+        raise ArgumentsError("Usage: python main.py <filename> <{bfs,dfs,a*,greedy,random}> <{snail,slow,fast}> <{"
                              "step,auto}>")
 
     filename, algo, speed, stepping = sys.argv[1:]
     step = True if stepping == "step" else False
 
-    if speed == "slow":
-        SLEEP_TIME = 0.2
-
+    match speed:
+        case "snail":
+            SLEEP_TIME = 1
+        case "slow":
+            SLEEP_TIME = 0.1
+        case "fast":
+            SLEEP_TIME = 0
     return filename, algo, stepping
 
 
@@ -219,10 +227,10 @@ def bfs(start, end):
                 parent[neighbour] = current
 
                 maze[neighbour[::-1]] = 'o'
-                animate_move()
+                draw_step(*neighbour)
 
         maze[current[::-1]] = 'c'
-        animate_move()
+        draw_step(*current)
 
     return backtrace(parent, end)
 
@@ -245,7 +253,7 @@ def a_star(start, end, heuristic=euclidean_distance):
 
         if current == end:
             maze[current[::-1]] = 'c'
-            animate_move()
+            draw_step(*current)
             break
 
         # returns neighbours that are not closed and are not wall
@@ -258,10 +266,10 @@ def a_star(start, end, heuristic=euclidean_distance):
                 parent[neighbour] = current
 
                 maze[neighbour[::-1]] = 'o'
-                animate_move()
+                draw_step(*neighbour)
 
         maze[current[::-1]] = 'c'
-        animate_move()
+        draw_step(*current)
 
     return backtrace(parent, end)
 
@@ -290,10 +298,10 @@ def greedy_search(start, end, heuristic=euclidean_distance):
                 parent[neighbour] = current
 
                 maze[neighbour[::-1]] = 'o'
-                animate_move()
+                draw_step(*neighbour)
 
         maze[current[::-1]] = 'c'
-        animate_move()
+        draw_step(*current)
 
     return backtrace(parent, end)
 
@@ -323,10 +331,10 @@ def random_search(start, end):
                 parent[neighbour] = current
 
                 maze[neighbour[::-1]] = 'o'
-                animate_move()
+                draw_step(*neighbour)
 
         maze[current[::-1]] = 'c'
-        animate_move()
+        draw_step(*current)
 
     return backtrace(parent, end)
 
@@ -340,14 +348,14 @@ def dfs(start, end):
     while len(stack) != 0:
         current, can_close = stack.pop()
         maze[current[::-1]] = 'o'
-        animate_move()
+        draw_step(*current)
 
         if current == end:
             break
 
         if can_close:
             maze[current[::-1]] = 'c'
-            animate_move()
+            draw_step(*current)
             continue
 
         visited.add(current)
