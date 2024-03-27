@@ -1,5 +1,7 @@
 import os
 import sys
+from time import sleep
+
 import numpy as np
 import pygame
 
@@ -9,11 +11,13 @@ CELL_SIZE = 20
 SCREEN_WIDTH, SCREEN_HEIGHT = 3840, 2160
 PADDING = 150
 OFFSET_FOR_RESULTS = 150
+SHUFFLE = 2
 # Colors ---------------------------------------------------------------------------------------------------------------
-BLACK = pygame.Color(250, 235, 215)
-WHITE = pygame.Color(139, 69, 19)
+DARK = pygame.Color(250, 235, 215)
+LIGHT = pygame.Color(139, 69, 19)
 RED = pygame.Color(220, 20, 60)
-COLORS = {'w': WHITE, 'b': BLACK, 'q': RED}
+BLACK = pygame.Color(0, 0, 0)
+COLORS = {'w': LIGHT, 'b': DARK, 'q': RED}
 MOVES = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)]
 # Global variables -----------------------------------------------------------------------------------------------------
 maze = np.array([])
@@ -38,7 +42,7 @@ def calculate_screen_size():
                     (SCREEN_HEIGHT - OFFSET_FOR_RESULTS - PADDING) // n)
 
 
-def screen_init(iterations):
+def screen_init():
     global screen, screen_height, screen_width
     cols, rows = len(maze[0]), len(maze)
 
@@ -47,10 +51,39 @@ def screen_init(iterations):
     screen_width, screen_height = cols * CELL_SIZE, rows * CELL_SIZE + OFFSET_FOR_RESULTS
     screen = pygame.display.set_mode((screen_width, screen_height), )
     pygame.display.set_caption("N Queens problem - Hill Climbing Algorithm")
+    redraw()
 
+
+def set_label(iterations):
+    pygame.draw.rect(screen, BLACK, (20, screen_height - OFFSET_FOR_RESULTS, screen_width, OFFSET_FOR_RESULTS))
     font = pygame.font.Font(None, 80)
-    label1 = font.render("Iterations : " + str(iterations), True, WHITE)
+    label1 = font.render("Iterations : " + str(iterations), True, LIGHT)
     screen.blit(label1, (20, screen_height - OFFSET_FOR_RESULTS + 20))
+    pygame.display.flip()
+
+
+def set_label_done(iterations):
+    set_label(iterations)
+    pygame.draw.rect(screen, BLACK, (20, screen_height - 80, screen_width, OFFSET_FOR_RESULTS))
+    font = pygame.font.Font(None, 80)
+    label2 = font.render("Done!", True, LIGHT)
+    screen.blit(label2, (20, screen_height - 80))
+    pygame.display.flip()
+
+
+def visualize(old_positions, new_positions):
+    check_events()
+    global maze
+    for i in range(len(old_positions)):
+        x, y = old_positions[i]
+        if (x + y) % 2 == 0:
+            maze[y][x] = 'b'
+        else:
+            maze[y][x] = 'w'
+
+    for i in range(len(new_positions)):
+        x, y = new_positions[i]
+        maze[y][x] = 'q'
     redraw()
 
 
@@ -81,11 +114,12 @@ def generate_maze():
 
 # Reading Input --------------------------------------------------------------------------------------------------------
 def read_input():
-    if len(sys.argv) != 3:
-        raise "Usage python3 main.py <N> <neighbour_method1-3>"
+    if len(sys.argv) != 4:
+        raise "Usage python3 main.py <N> <neighbour_method1-3> <visualization>"
     global N
     N = int(sys.argv[1])
-    return int(sys.argv[2])
+
+    return int(sys.argv[2]), bool(int(sys.argv[3]))
 
 
 # HELPER FUNCTIONS  ----------------------------------------------------------------------------------------------------
@@ -174,15 +208,18 @@ def get_random_position(state, old_threat):
 
 
 def get_most_threatened(state):
-    id, threats = 0, 0
+    ids, threats = [], 0
 
     for i in range(len(state)):
         cur_threats = position_threats(state[i], state)
         if cur_threats > threats:
-            id = i
+            ids.clear()
+            ids.append(i)
             threats = cur_threats
+        elif cur_threats == threats:
+            ids.append(i)
 
-    return id, threats
+    return ids[np.random.randint(0, len(ids))], threats
 
 
 def chess_move(queen_positions, hoops_allowed=0):
@@ -226,7 +263,7 @@ def valid_chess_move(queue_positions):
 def best_threat_move(queen_positions):
     # this function is using just the position_threats not objective_function to determine the best move
     q_id, old_threat = get_most_threatened(queen_positions)
-    best = [queen_positions[q_id]]
+    best = queen_positions[q_id]
     queen_positions.remove(queen_positions[q_id])
     it = 1
 
@@ -241,18 +278,19 @@ def best_threat_move(queen_positions):
 
                 elif new_threats == old_threat and np.random.randint(0, it) == 0:
                     best = current
-
+        it += 1
     queen_positions.append(best)
+
     return queen_positions
 
 
 # HILL CLIMBING --- ----------------------------------------------------------------------------------------------------
-def hill_climbing(get_neighbour_state):
-    state = get_random_state()
+def hill_climbing(state, get_neighbour_state, visualization=False):
     threats = objective_function(state)
     iterations = 0
 
     while threats > 0:
+        old_state = state.copy()
         best_neighbour = get_neighbour_state(state)
         new_threats = objective_function(best_neighbour)
 
@@ -261,20 +299,25 @@ def hill_climbing(get_neighbour_state):
             threats = new_threats
             print("Threats", threats)
         else:
-            q_id, most_threats = get_most_threatened(state)
-
-            state.remove(state[q_id])
-            state.append(get_random_position(state, most_threats))
-            threats = objective_function(state)
+            for _ in range(SHUFFLE):
+                q_id, most_threats = get_most_threatened(state)
+                state.remove(state[q_id])
+                state.append(get_random_position(state, most_threats))
+                threats = objective_function(state)
 
         iterations += 1
+        set_label(iterations)
+
+        if visualization:
+            sleep(0.3)
+            visualize(old_state, state)
 
     return state, iterations
 
 
 def main():
     global maze
-    method = read_input()
+    method, visualization = read_input()
 
     # dont shadow name
     match method:
@@ -287,12 +330,15 @@ def main():
         case _:
             raise "Invalid method"
 
-    state, iterations = hill_climbing(neighbour_method)
-
+    state = get_random_state()
     gen_maze_from_positions(state)
     calculate_screen_size()
-    screen_init(iterations)
+    screen_init()
 
+    state, iterations = hill_climbing(state, neighbour_method, visualization)
+
+    gen_maze_from_positions(state)
+    set_label_done(iterations)
     while True:
         check_events()
         redraw()
