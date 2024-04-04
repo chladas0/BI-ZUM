@@ -12,6 +12,7 @@ SCREEN_WIDTH, SCREEN_HEIGHT = 3840, 2160
 PADDING = 150
 OFFSET_FOR_RESULTS = 150
 SHUFFLE = 2
+SLEEP_TIME = 0.3
 # Colors ---------------------------------------------------------------------------------------------------------------
 DARK = pygame.Color(250, 235, 215)
 LIGHT = pygame.Color(139, 69, 19)
@@ -309,7 +310,7 @@ def hill_climbing(state, get_neighbour_state, visualization=False):
         set_label(iterations)
 
         if visualization:
-            sleep(0.3)
+            sleep(SLEEP_TIME)
             visualize(old_state, state)
 
     return state, iterations
@@ -319,7 +320,6 @@ def main():
     global maze
     method, visualization = read_input()
 
-    # dont shadow name
     match method:
         case 1:
             neighbour_method = valid_chess_move
