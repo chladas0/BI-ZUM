@@ -1,4 +1,12 @@
+import sys
 import pygame
+
+
+def check_events():
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
 
 
 def visualize_sudoku(screen, grid, x, y, solved=False):
@@ -29,6 +37,14 @@ def visualize_sudoku(screen, grid, x, y, solved=False):
             rect_x = x + margin + j * cell_size * block_size
             rect_y = y + margin + i * cell_size * block_size
             pygame.draw.rect(screen, (0, 0, 0), (rect_x, rect_y, cell_size * block_size, cell_size * block_size), 4)
+
+
+def display_solved_message(screen, x, y):
+    font = pygame.font.Font(None, 80)
+    solved_text = "Sudoku Solved!"
+    text_surface = font.render(solved_text, True, (0, 0, 0))
+    text_rect = text_surface.get_rect(center=(x, y))
+    screen.blit(text_surface, text_rect)
 
 
 def init_screen():

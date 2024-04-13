@@ -1,9 +1,9 @@
 import copy
 import random
-import sys
-
-import pygame
 from time import sleep
+
+import pygame.display
+
 from constants import *
 from vizualization import *
 
@@ -16,43 +16,14 @@ class SudokuSolver:
         self.not_fixed = set()
         self.not_fixed_vec = []
         self.fill_sudoku()
+        self.screen = init_screen()
 
     # Visualizations ---------------------------------------------------------------------------------------------------
-    # print the sudoku
-    def print_sudoku(self):
-        for i in range(9):
-            for j in range(9):
-                if self.sudoku[i][j] == 0:
-                    print(" ", end=" ")
-                else:
-                    print(self.sudoku[i][j], end=" ")
-                if j == 2 or j == 5:
-                    print("|", end=" ")
-            print()
-            if i == 2 or i == 5:
-                print("---------------------")
-
-    # print the occurrences of each number in the sudoku
-    def print_occurrences(self):
-        for i in range(9):
-            count = 0
-            for j in range(9):
-                for k in range(9):
-                    if self.sudoku[j][k] == i + 1:
-                        count += 1
-            print(i, " : ", count)
-
-    def visualize_solved(self):
-        screen = init_screen()
-        visualize_sudoku(screen, self.given_sudoku, 50, 50)
-        visualize_sudoku(screen, self.sudoku, 1000, 50, solved=True)
-
-        running = True
-        while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-            pygame.display.flip()
+    def redraw(self):
+        self.screen.fill((255, 255, 255))
+        visualize_sudoku(self.screen, self.given_sudoku, 50, 50)
+        visualize_sudoku(self.screen, self.sudoku, 1000, 50, solved=True)
+        pygame.display.flip()
 
     # Reading and filling the sudoku -----------------------------------------------------------------------------------
     def fill_sudoku(self):
@@ -160,50 +131,34 @@ class SudokuSolver:
             self.swap_two_positions(pos1, pos2)
             break
 
-    # def shuffle_problem_pos(self, pos):
-    #     while True:
-    #         x1, y1 = random.choice(self.not_fixed_vec)
-    #         if (x1, y1) in self.fixed or (x1, y1) == pos:
-    #             continue
-    #         self.swap_two_positions((x1, y1), pos)
-    #         break
-
     # Hill Climbing Algorithms -----------------------------------------------------------------------------------------
     def hill_climbing_classic(self):
         no_improvement, current_obj_val, best_obj_val = 0, self.objective_function(), self.objective_function()
+        hard_reset = 0
 
-        while True:
+        while current_obj_val != 0:
             to_swap1, to_swap2, best_val, best_improvement = [], [], None, None
 
-            if current_obj_val == 0:
-                print("The Sudoku was Solved", current_obj_val)
-                self.print_sudoku()
-                break
-
-            for i in range(9):
-                for j in range(9):
-                    if (i, j) not in self.fixed:
-                        val = self.get_objective_val_for_position(i, j)
-                        if not to_swap1 or val > best_val:
-                            to_swap1 = [(i, j)]
-                            best_val = val
-                        elif val == best_val:
-                            to_swap1.append((i, j))
+            for i, j in self.not_fixed_vec:
+                val = self.get_objective_val_for_position(i, j)
+                if not to_swap1 or val > best_val:
+                    to_swap1 = [(i, j)]
+                    best_val = val
+                elif val == best_val:
+                    to_swap1.append((i, j))
 
             first_pos = random.choice(to_swap1)
 
             # the position with the highest obj val is stored in to_swap1
             # now find the position that swapped with to_swap1 gives the best improvement
 
-            for i in range(9):
-                for j in range(9):
-                    if (i, j) not in self.fixed and (i, j) != first_pos:
-                        improvement = self.getImprovement(first_pos, (i, j), current_obj_val)
-                        if not to_swap2 or improvement > best_improvement:
-                            to_swap2 = [(i, j)]
-                            best_improvement = improvement
-                        elif improvement == best_improvement:
-                            to_swap2.append((i, j))
+            for i, j in self.not_fixed_vec:
+                improvement = self.getImprovement(first_pos, (i, j), current_obj_val)
+                if not to_swap2 or improvement > best_improvement:
+                    to_swap2 = [(i, j)]
+                    best_improvement = improvement
+                elif improvement == best_improvement:
+                    to_swap2.append((i, j))
 
             # Swap the best found and check improving
             self.swap_two_positions(first_pos, random.choice(to_swap2))
@@ -211,7 +166,6 @@ class SudokuSolver:
 
             if current_obj_val < best_obj_val:
                 best_obj_val = current_obj_val
-                print("Best objective function value: ", best_obj_val)
 
             if best_improvement <= 0:
                 no_improvement += 1
@@ -219,9 +173,18 @@ class SudokuSolver:
                 no_improvement = 0
 
             if no_improvement > 5:
+                hard_reset += 1
                 no_improvement = 0
                 self.shuffle_sudoku()
                 current_obj_val = self.objective_function()
+
+            # if 10 soft resets didn't help shuffle more
+            if hard_reset > 10:
+                hard_reset = 0
+                for i in range(20):
+                    self.shuffle_sudoku()
+
+            self.redraw()
 
     # hill climbing that is not choosing always the best choice
     # for each position it calculates its duplicates - row, col, block
@@ -232,50 +195,49 @@ class SudokuSolver:
     # and swap those 2 positions
     def hill_climb_randomized(self):
         no_improvement, current_obj_val, best_obj_val = 0, self.objective_function(), self.objective_function()
+        hard_reset = 0
 
-        while True:
+        while current_obj_val != 0:
             to_swap1, to_swap2 = [], []
 
-            if current_obj_val == 0:
-                print("The Sudoku was Solved", current_obj_val)
-                self.print_sudoku()
-                break
-
             # Collect all the position with objective_val > 1 (at least one duplicate row, col or block)
-            for i in range(9):
-                for j in range(9):
-                    if (i, j) not in self.fixed:
-                        val = self.get_objective_val_for_position(i, j)
-                        if val > 0:
-                            to_swap1.append((i, j))
+            for i, j in self.not_fixed_vec:
+                val = self.get_objective_val_for_position(i, j)
+                if val > 0:
+                    to_swap1.append((i, j))
 
             first_pos = random.choice(to_swap1)
-
             # find the value that when swapped with val from previous cycle gives some improvement
-            for i in range(9):
-                for j in range(9):
-                    if (i, j) not in self.fixed and (i, j) != first_pos:
-                        improvement = self.getImprovement(first_pos, (i, j), current_obj_val)
-                        if improvement > 0:
-                            to_swap2.append((i, j))
+            for i, j in self.not_fixed_vec:
+                if (i, j) != first_pos:
+                    improvement = self.getImprovement(first_pos, (i, j), current_obj_val)
+                    if improvement > 0:
+                        to_swap2.append((i, j))
 
             # found 2 positions to swap
             if to_swap2:
                 second_pos = random.choice(to_swap2)
-
                 self.swap_two_positions(first_pos, second_pos)
                 current_obj_val = self.objective_function()
+                no_improvement = 0
 
                 if current_obj_val < best_obj_val:
                     best_obj_val = current_obj_val
-                    print("Best objective function value: ", best_obj_val)
 
             else:
                 no_improvement += 1
                 if no_improvement > 5:
+                    hard_reset += 1
                     no_improvement = 0
                     self.shuffle_sudoku()
                     current_obj_val = self.objective_function()
+
+            if hard_reset > 10:
+                hard_reset = 0
+                for i in range(20):
+                    self.shuffle_sudoku()
+
+            self.redraw()
 
 
 def count_duplicates(arr):
@@ -294,8 +256,12 @@ def main():
 
     match sys.argv[1]:
         case "1":
-            sudoku = real_sudoku1
+            sudoku = sudoku1
         case "2":
+            sudoku = sudoku2
+        case "3":
+            sudoku = hard_sudoku
+        case "4":
             sudoku = solved_sudoku
 
     solver = SudokuSolver(sudoku)
@@ -306,7 +272,14 @@ def main():
         case "random":
             solver.hill_climb_randomized()
 
-    solver.visualize_solved()
+    display_solved_message(solver.screen, 1000, 1400)
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+        pygame.display.flip()
 
 
 if __name__ == '__main__':
