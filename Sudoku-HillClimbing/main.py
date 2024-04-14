@@ -1,7 +1,5 @@
 import copy
 import random
-from time import sleep
-
 import pygame.display
 
 from constants import *
@@ -15,33 +13,36 @@ class SudokuSolver:
         self.fixed = set()
         self.not_fixed = set()
         self.not_fixed_vec = []
+        self.size = len(self.sudoku)
+        self.block_size = int(self.size ** 0.5)
         self.fill_sudoku()
         self.screen = init_screen()
 
     # Visualizations ---------------------------------------------------------------------------------------------------
     def redraw(self):
         self.screen.fill((255, 255, 255))
-        visualize_sudoku(self.screen, self.given_sudoku, 50, 50)
-        visualize_sudoku(self.screen, self.sudoku, 1000, 50, solved=True)
+        visualize_sudoku(self.screen, self.given_sudoku, 50, 50, self.size, self.block_size)
+        visualize_sudoku(self.screen, self.sudoku, 1400, 50, self.size, self.block_size)
         pygame.display.flip()
+        check_events()
 
     # Reading and filling the sudoku -----------------------------------------------------------------------------------
     def fill_sudoku(self):
         to_fill = self.get_unused_values()
         random.shuffle(to_fill)
 
-        for i in range(9):
-            for j in range(9):
+        for i in range(self.size):
+            for j in range(self.size):
                 if self.sudoku[i][j] == 0:
                     self.sudoku[i][j] = to_fill.pop()
 
     # get all values that are not used in the sudoku (9 times {1..9})
     def get_unused_values(self):
         to_fill = []
-        used_values = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0}
+        used_values = {i: 0 for i in range(1, self.size + 1)}
 
-        for i in range(9):
-            for j in range(9):
+        for i in range(self.size):
+            for j in range(self.size):
                 if self.sudoku[i][j] != 0:
                     self.fixed.add((i, j))
                     used_values[self.sudoku[i][j]] += 1
@@ -49,9 +50,9 @@ class SudokuSolver:
                     self.not_fixed.add((i, j))
                     self.not_fixed_vec.append((i, j))
 
-        for i in range(9):
+        for i in range(self.size):
             for val, amount in used_values.items():
-                if amount != 9:
+                if amount != self.size:
                     to_fill.append(val)
                     used_values[val] += 1
 
@@ -66,10 +67,11 @@ class SudokuSolver:
             violation += count_duplicates(row)
 
         # count violations in blocks
-        for i in range(3):
-            for j in range(3):
-                block = [self.sudoku[row][col] for row in range(i * 3, (i + 1) * 3) for col in
-                         range(j * 3, (j + 1) * 3)]
+        for i in range(self.block_size):
+            for j in range(self.block_size):
+                block = [self.sudoku[row][col] for row in range(i * self.block_size, (i + 1) * self.block_size) for col
+                         in
+                         range(j * self.block_size, (j + 1) * self.block_size)]
                 violation += count_duplicates(block)
 
         # count violations in column
@@ -85,20 +87,21 @@ class SudokuSolver:
         val = self.sudoku[row][col]
 
         # duplicates of val
-        for i in range(9):
+        for i in range(self.size):
             if i != col and self.sudoku[row][i] == val:
                 count += 1
 
         # column
-        for i in range(9):
+        for i in range(self.size):
             if i != row and self.sudoku[i][col] == val:
                 count += 1
 
         # block
-        block_row, block_col = row // 3, col // 3
-        for i in range(3):
-            for j in range(3):
-                if (i != row % 3 or j != col % 3) and self.sudoku[block_row * 3 + i][block_col * 3 + j] == val:
+        block_row, block_col = row // self.block_size, col // self.block_size
+        for i in range(self.block_size):
+            for j in range(self.block_size):
+                if ((i != row % self.block_size or j != col % self.block_size) and
+                        self.sudoku[block_row * self.block_size + i][block_col * self.block_size + j] == val):
                     count += 1
 
         return count
@@ -166,6 +169,7 @@ class SudokuSolver:
 
             if current_obj_val < best_obj_val:
                 best_obj_val = current_obj_val
+                hard_reset = 0
 
             if best_improvement <= 0:
                 no_improvement += 1
@@ -176,13 +180,14 @@ class SudokuSolver:
                 hard_reset += 1
                 no_improvement = 0
                 self.shuffle_sudoku()
-                current_obj_val = self.objective_function()
 
             # if 10 soft resets didn't help shuffle more
             if hard_reset > 10:
                 hard_reset = 0
-                for i in range(20):
+                for i in range(10):
                     self.shuffle_sudoku()
+
+            current_obj_val = self.objective_function()
 
             self.redraw()
 
@@ -220,6 +225,7 @@ class SudokuSolver:
                 self.swap_two_positions(first_pos, second_pos)
                 current_obj_val = self.objective_function()
                 no_improvement = 0
+                hard_reset = 0
 
                 if current_obj_val < best_obj_val:
                     best_obj_val = current_obj_val
@@ -230,14 +236,15 @@ class SudokuSolver:
                     hard_reset += 1
                     no_improvement = 0
                     self.shuffle_sudoku()
-                    current_obj_val = self.objective_function()
 
             if hard_reset > 10:
                 hard_reset = 0
                 for i in range(20):
                     self.shuffle_sudoku()
 
+            current_obj_val = self.objective_function()
             self.redraw()
+        self.redraw()
 
 
 def count_duplicates(arr):
@@ -250,7 +257,7 @@ def count_duplicates(arr):
 
 def main():
     if len(sys.argv) != 3:
-        print("Usage: python main.py <sudoku{1..4}> <hill_climbing_type{classic/random}>")
+        print("Usage: python main.py <sudoku{1..5}> <hill_climbing_type{classic/random}>")
         exit(1)
     sudoku = None
 
@@ -263,6 +270,8 @@ def main():
             sudoku = hard_sudoku
         case "4":
             sudoku = solved_sudoku
+        case "5":
+            sudoku = hexadoku
 
     solver = SudokuSolver(sudoku)
 
@@ -272,7 +281,7 @@ def main():
         case "random":
             solver.hill_climb_randomized()
 
-    display_solved_message(solver.screen, 1000, 1400)
+    display_solved_message(solver.screen)
 
     running = True
     while running:
